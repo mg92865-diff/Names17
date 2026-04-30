@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+     
+        /* Existing CSS */
+        :root { --primary: #2196F3; --danger: #f44336; --success: #4CAF50; --bg: #eeeeee; --text: #212121; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); margin: 0; display: flex; justify-content: center; }
+        .container { background: white; width: 100%; min-height: 100vh; max-width: 500px; padding: 20px; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .view { display: none; }
+        .active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        h2 { margin-top: 0; color: var(--text); border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        
+        /* Updated record-item to use Grid as preferred */
+        .record-item { 
+            display: grid;
+            grid-template-columns: 1fr auto;
+            padding: 18px; 
+            border-bottom: 1px solid #ddd; 
+            cursor: pointer; 
+            font-size: 1.1rem;
+            align-items: center;
+        }
+        .record-item:active { background: #e0e0e0; }
+        input { width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1rem; margin-top: 12px; text-transform: uppercase; }
+        .btn-add { background: var(--primary); color: white; margin-top: 25px; }
+        .btn-save { background: var(--success); color: white; }
+        .btn-delete { background: var(--danger); color: white; }
+        .btn-cancel { background: #757575; color: white; }
+        .label-hint { font-size: 0.8rem; color: #666; margin-bottom: -5px; display: block; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="container">
+    <div id="view-list" class="view active">
+        <h2>Records</h2>
+        <div id="records-container"></div>
+        <button class="btn-add" onclick="showView('view-input')">Add New Entry</button>
+    </div>
+
+    <div id="view-input" class="view">
+        <h2>New Record</h2>
+        <label class="label-hint">Full Name</label>
+        <input type="text" id="in-name" placeholder="e.g. John Doe">
+        <label class="label-hint">Age</label>
+        <input type="number" id="in-age" placeholder="e.g. 25" inputmode="numeric">
+        <button class="btn-save" onclick="addRecord()">Save Record</button>
+        <button class="btn-cancel" onclick="showView('view-list')">Cancel</button>
+    </div>
+
+    <div id="view-edit" class="view">
+        <h2>Edit Details</h2>
+        <input type="hidden" id="edit-id">
+        <label class="label-hint">Name</label>
+        <input type="text" id="edit-name">
+        <label class="label-hint">Age</label>
+        <input type="number" id="edit-age" inputmode="numeric">
+        <button class="btn-save" onclick="updateRecord()">Update</button>
+        <button class="btn-delete" onclick="deleteRecord()">Delete</button>
+        <button class="btn-cancel" onclick="showView('view-list')">Back</button>
+    </div>
+</div>
+
+<script>
+   // 1. Use a different variable name (supabaseClient) to avoid conflicts
+const SUPABASE_URL = 'https://jyxzjppujqnvtzfcssyj.supabase.co'; 
+const SUPABASE_KEY = 'sb_publishable_gpsrWElVPKKiv40-37X9Tg_WUUcZ6kD';
+
+// Use 'window.supabase' to access the library from the CDN
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let records = [];
+
+    // 2. Fetch Data - Update the reference to supabaseClient
+    async function fetchRecords() {
+        const { data, error } = await supabaseClient
+            .from('records')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching:', error);
+        } else {
+            records = data;
+            renderRecords();
+        }
+    }
+
+    
+
+    function showView(viewId) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById(viewId).classList.add('active');
+        if(viewId === 'view-list') fetchRecords();
+        window.scrollTo(0,0);
+    }
+
+    function renderRecords() {
+        const container = document.getElementById('records-container');
+        container.innerHTML = records.length ? '' : '<p style="text-align:center; padding: 20px; color: #999;">No records found.</p>';
+        
+        records.forEach((rec) => {
+            const div = document.createElement('div');
+            div.className = 'record-item';
+            div.innerHTML = `<span>${rec.name}</span> <span style="color:#666">Age: ${rec.age}</span>`;
+            div.onclick = () => openEditView(rec);
+            container.appendChild(div);
+        });
+    }
+
+    // 3. CRUD Operations
+    async function addRecord() {
+        const name = document.getElementById('in-name').value.trim();
+        const age = parseInt(document.getElementById('in-age').value.trim());
+
+        if (name && age) {
+            const { error } = await supabaseClient
+                .from('records')
+                .insert([{ name, age }]);
+
+            if (!error) {
+                document.getElementById('in-name').value = '';
+                document.getElementById('in-age').value = '';
+                showView('view-list');
+            } else {
+                alert("Error saving record");
+            }
+        }
+    }
+
+    function openEditView(record) {
+        document.getElementById('edit-id').value = record.id;
+        document.getElementById('edit-name').value = record.name;
+        document.getElementById('edit-age').value = record.age;
+        showView('view-edit');
+    }
+
+    async function updateRecord() {
+        const id = document.getElementById('edit-id').value;
+        const name = document.getElementById('edit-name').value.trim();
+        const age = parseInt(document.getElementById('edit-age').value.trim());
+
+        const { error } = await supabaseClient
+            .from('records')
+            .update({ name, age })
+            .eq('id', id);
+
+        if (!error) {
+            showView('view-list');
+        } else {
+            alert("Error updating record");
+        }
+    }
+
+    async function deleteRecord() {
+        const id = document.getElementById('edit-id').value;
+        if(confirm("Permanently delete this record?")) {
+            const { error } = await supabaseClient
+                .from('records')
+                .delete()
+                .eq('id', id);
+
+            if (!error) {
+                showView('view-list');
+            }
+        }
+    }
+
+    // Initial Load
+    fetchRecords();
+</script>
+
+</body>
+</html>
